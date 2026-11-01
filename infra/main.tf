@@ -49,6 +49,22 @@ resource "aws_security_group" "app" {
     cidr_blocks = [var.my_ip_cidr]
   }
 
+  ingress {
+    description = "Grafana from my IP"
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = [var.my_ip_cidr]
+  }
+
+  ingress {
+    description = "Prometheus from my IP"
+    from_port   = 9090
+    to_port     = 9090
+    protocol    = "tcp"
+    cidr_blocks = [var.my_ip_cidr]
+  }
+
   egress {
     description = "All outbound (pull images, install packages)"
     from_port   = 0
@@ -114,5 +130,11 @@ resource "aws_instance" "app" {
 
   tags = {
     Name = "${var.project_name}-server"
+  }
+
+  # Amazon publishes new AMIs regularly; don't replace the running server
+  # (and change its IP) just because a newer one exists.
+  lifecycle {
+    ignore_changes = [ami]
   }
 }

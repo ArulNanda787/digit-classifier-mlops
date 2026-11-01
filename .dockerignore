@@ -11,3 +11,5 @@ scripts/
 .pytest_cache/
 .git/
 .DS_Store
+infra/
+monitoring/

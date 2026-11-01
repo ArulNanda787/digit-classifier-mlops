@@ -123,3 +123,30 @@ def test_real_model_on_mnist_samples():
             correct += int(res.json()["digit"] == int(label))
 
     assert correct / len(labels) >= 0.9
+
+
+def _metric_value(text: str, line_start: str) -> float:
+    for line in text.splitlines():
+        if line.startswith(line_start):
+            return float(line.rsplit(" ", 1)[1])
+    return 0.0
+
+
+def test_metrics_exposed_and_counting(client):
+    before = client.get("/metrics").text
+    client.post("/predict", files={"file": ("digit.png", _digit_png(), "image/png")})
+    client.post("/predict", files={"file": ("notes.txt", b"hello", "text/plain")})
+    after = client.get("/metrics")
+
+    assert after.status_code == 200
+    assert "text/plain" in after.headers["content-type"]
+    text = after.text
+
+    key = 'predictions_total{digit="7"}'
+    assert _metric_value(text, key) == _metric_value(before, key) + 1
+
+    key = 'prediction_errors_total{reason="unsupported_type"}'
+    assert _metric_value(text, key) == _metric_value(before, key) + 1
+
+    assert 'http_requests_total{method="POST",endpoint="/predict",status="200"}' in text
+    assert "http_request_duration_seconds_bucket" in text
