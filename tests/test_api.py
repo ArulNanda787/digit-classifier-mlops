@@ -148,5 +148,13 @@ def test_metrics_exposed_and_counting(client):
     key = 'prediction_errors_total{reason="unsupported_type"}'
     assert _metric_value(text, key) == _metric_value(before, key) + 1
 
-    assert 'http_requests_total{method="POST",endpoint="/predict",status="200"}' in text
+    # Label order in the output isn't guaranteed, so check each label separately.
+    request_lines = [
+        line for line in text.splitlines()
+        if line.startswith("http_requests_total{")
+        and 'endpoint="/predict"' in line
+        and 'method="POST"' in line
+        and 'status="200"' in line
+    ]
+    assert request_lines, "no http_requests_total line for POST /predict 200"
     assert "http_request_duration_seconds_bucket" in text
