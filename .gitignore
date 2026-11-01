@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+
+# Training outputs that stay local
+mlruns/
+mlartifacts/
+data/
+samples/
+models/candidates/
+
+# Terraform (Phase 5) — state can contain secrets
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars

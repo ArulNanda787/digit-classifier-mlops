@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Digit Classifier</title>
+<style>
+  :root {
+    --bg: #f4f2ee; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b70;
+    --line: #e2dfd8; --accent: #2f5bea; --accent-soft: #dfe6fd; --error: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141416; --panel: #1e1e21; --ink: #f2f2f3; --muted: #9a9aa0;
+      --line: #313136; --accent: #7b9bff; --accent-soft: #263255; --error: #ff7a6b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex; justify-content: center; padding: 32px 16px;
+  }
+  main { width: 100%; max-width: 760px; }
+  h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .grid { display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
+  @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 16px;
+  }
+  canvas {
+    display: block; width: 100%; aspect-ratio: 1; border-radius: 10px;
+    background: #000; touch-action: none; cursor: crosshair;
+  }
+  .row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  button, .file-btn {
+    font: inherit; border-radius: 8px; padding: 8px 14px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  .file-btn input { display: none; }
+  .result-digit { font-size: 72px; font-weight: 700; line-height: 1; }
+  .result-conf { color: var(--muted); margin-top: 4px; }
+  .bars { margin-top: 18px; display: grid; gap: 6px; }
+  .bar { display: grid; grid-template-columns: 16px 1fr 52px; gap: 10px; align-items: center; font-variant-numeric: tabular-nums; }
+  .track { height: 10px; background: var(--accent-soft); border-radius: 5px; overflow: hidden; }
+  .fill { height: 100%; width: 0; background: var(--accent); transition: width .25s ease; }
+  .bar.top { font-weight: 600; }
+  .pct { text-align: right; color: var(--muted); font-size: 13px; }
+  .status { margin-top: 12px; font-size: 13px; color: var(--muted); min-height: 20px; }
+  .status.error { color: var(--error); }
+  .empty { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Digit Classifier</h1>
+  <p class="sub">Draw a single digit (0–9) or upload an image, then predict.</p>
+
+  <div class="grid">
+    <section class="panel">
+      <canvas id="pad" width="280" height="280" aria-label="Drawing canvas"></canvas>
+      <div class="row">
+        <button class="primary" id="predict">Predict</button>
+        <button id="clear">Clear</button>
+        <label class="file-btn">Upload…<input type="file" id="file" accept="image/*"></label>
+      </div>
+      <div class="status" id="status"></div>
+    </section>
+
+    <section class="panel" id="result">
+      <p class="empty">Your prediction will appear here.</p>
+    </section>
+  </div>
+</main>
+
+<script>
+const pad = document.getElementById("pad");
+const ctx = pad.getContext("2d");
+const statusEl = document.getElementById("status");
+const resultEl = document.getElementById("result");
+const predictBtn = document.getElementById("predict");
+let drawing = false, hasInk = false, last = null;
+
+function resetCanvas() {
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, pad.width, pad.height);
+  hasInk = false;
+}
+resetCanvas();
+
+function point(e) {
+  const r = pad.getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left) * (pad.width / r.width),
+    y: (e.clientY - r.top) * (pad.height / r.height),
+  };
+}
+
+pad.addEventListener("pointerdown", e => {
+  drawing = true; last = point(e); pad.setPointerCapture(e.pointerId);
+  ctx.fillStyle = "#fff";
+  ctx.beginPath(); ctx.arc(last.x, last.y, 9, 0, Math.PI * 2); ctx.fill();
+  hasInk = true;
+});
+pad.addEventListener("pointermove", e => {
+  if (!drawing) return;
+  const p = point(e);
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = 18; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+  last = p;
+});
+["pointerup", "pointercancel", "pointerleave"].forEach(ev =>
+  pad.addEventListener(ev, () => { drawing = false; }));
+
+function setStatus(msg, isError = false) {
+  statusEl.textContent = msg;
+  statusEl.classList.toggle("error", isError);
+}
+
+function render(data) {
+  const rows = data.probabilities.map((p, d) => `
+    <div class="bar ${d === data.digit ? "top" : ""}">
+      <span>${d}</span>
+      <div class="track"><div class="fill" style="width:${(p * 100).toFixed(1)}%"></div></div>
+      <span class="pct">${(p * 100).toFixed(1)}%</span>
+    </div>`).join("");
+  resultEl.innerHTML = `
+    <div class="result-digit">${data.digit}</div>
+    <div class="result-conf">${(data.confidence * 100).toFixed(1)}% confidence</div>
+    <div class="bars">${rows}</div>`;
+}
+
+async function send(blob, filename) {
+  const form = new FormData();
+  form.append("file", blob, filename);
+  predictBtn.disabled = true;
+  setStatus("Predicting…");
+  try {
+    const res = await fetch("/predict", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `Request failed (${res.status})`);
+    render(data);
+    setStatus("");
+  } catch (err) {
+    setStatus(err.message, true);
+  } finally {
+    predictBtn.disabled = false;
+  }
+}
+
+predictBtn.addEventListener("click", () => {
+  if (!hasInk) { setStatus("Draw a digit first.", true); return; }
+  pad.toBlob(blob => send(blob, "canvas.png"), "image/png");
+});
+
+document.getElementById("clear").addEventListener("click", () => {
+  resetCanvas();
+  setStatus("");
+  resultEl.innerHTML = '<p class="empty">Your prediction will appear here.</p>';
+});
+
+document.getElementById("file").addEventListener("change", e => {
+  const f = e.target.files[0];
+  if (f) send(f, f.name);
+  e.target.value = "";
+});
+</script>
+</body>
+</html>

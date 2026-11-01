@@ -1,0 +1,13 @@
+.venv/
+mlruns/
+mlartifacts/
+data/
+samples/
+models/candidates/
+tests/
+scripts/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.git/
+.DS_Store
