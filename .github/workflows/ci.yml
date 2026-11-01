@@ -52,3 +52,58 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Smoke test the container
+        run: |
+          docker run -d --name smoke -p 8000:8000 digit-classifier:ci
+
+          # Wait up to 60 s for the model to load
+          for i in $(seq 1 30); do
+            curl -fs http://127.0.0.1:8000/health | grep -q '"model_loaded":true' && break
+            sleep 2
+          done
+          curl -fs http://127.0.0.1:8000/health | grep -q '"model_loaded":true'
+
+          # Real prediction: draw a "1" with Pillow inside the container
+          docker exec smoke python -c "import sys; from PIL import Image, ImageDraw; im = Image.new('L', (280, 280)); ImageDraw.Draw(im).line([(140, 40), (140, 240)], fill=255, width=20); im.save(sys.stdout.buffer, 'PNG')" > digit.png
+          curl -fsS -F "file=@digit.png;type=image/png" http://127.0.0.1:8000/predict | tee prediction.json
+          grep -q '"digit"' prediction.json
+
+          # Error handling: a non-image must be rejected with 415
+          status=$(curl -s -o /dev/null -w '%{http_code}' -F "file=@README.md;type=text/plain" http://127.0.0.1:8000/predict)
+          echo "Non-image upload returned $status"
+          test "$status" = "415"
+
+          # Frontend is served
+          curl -fs http://127.0.0.1:8000/ | grep -q "<canvas"
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs smoke || true
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push multi-arch image
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
