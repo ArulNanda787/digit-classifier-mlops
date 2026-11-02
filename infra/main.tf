@@ -46,7 +46,7 @@ resource "aws_security_group" "app" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.my_ip_cidr]
+    cidr_blocks = concat([var.my_ip_cidr], var.extra_ip_cidrs)
   }
 
   ingress {
@@ -54,7 +54,7 @@ resource "aws_security_group" "app" {
     from_port   = 3000
     to_port     = 3000
     protocol    = "tcp"
-    cidr_blocks = [var.my_ip_cidr]
+    cidr_blocks = concat([var.my_ip_cidr], var.extra_ip_cidrs)
   }
 
   ingress {
@@ -62,7 +62,7 @@ resource "aws_security_group" "app" {
     from_port   = 9090
     to_port     = 9090
     protocol    = "tcp"
-    cidr_blocks = [var.my_ip_cidr]
+    cidr_blocks = concat([var.my_ip_cidr], var.extra_ip_cidrs)
   }
 
   egress {

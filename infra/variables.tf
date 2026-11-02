@@ -26,3 +26,9 @@ variable "my_ip_cidr" {
   description = "Your public IP in CIDR form, e.g. 203.0.113.10/32 (only this IP may SSH in)"
   type        = string
 }
+
+variable "extra_ip_cidrs" {
+  description = "More IPs allowed SSH/Grafana/Prometheus access (other networks, e.g. a phone hotspot). Set in extra.auto.tfvars."
+  type        = list(string)
+  default     = []
+}
